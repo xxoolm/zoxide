@@ -8,11 +8,11 @@ const completion: Fig.Spec = {
       options: [
         {
           name: ["-h", "--help"],
-          description: "Print help information",
+          description: "Print help",
         },
         {
           name: ["-V", "--version"],
-          description: "Print version information",
+          description: "Print version",
         },
       ],
       args: {
@@ -22,12 +22,94 @@ const completion: Fig.Spec = {
       },
     },
     {
+      name: "edit",
+      description: "Edit the database",
+      subcommands: [
+        {
+          name: "decrement",
+          hidden: true,
+          options: [
+            {
+              name: ["-h", "--help"],
+              description: "Print help",
+            },
+            {
+              name: ["-V", "--version"],
+              description: "Print version",
+            },
+          ],
+          args: {
+            name: "path",
+          },
+        },
+        {
+          name: "delete",
+          hidden: true,
+          options: [
+            {
+              name: ["-h", "--help"],
+              description: "Print help",
+            },
+            {
+              name: ["-V", "--version"],
+              description: "Print version",
+            },
+          ],
+          args: {
+            name: "path",
+          },
+        },
+        {
+          name: "increment",
+          hidden: true,
+          options: [
+            {
+              name: ["-h", "--help"],
+              description: "Print help",
+            },
+            {
+              name: ["-V", "--version"],
+              description: "Print version",
+            },
+          ],
+          args: {
+            name: "path",
+          },
+        },
+        {
+          name: "reload",
+          hidden: true,
+          options: [
+            {
+              name: ["-h", "--help"],
+              description: "Print help",
+            },
+            {
+              name: ["-V", "--version"],
+              description: "Print version",
+            },
+          ],
+        },
+      ],
+      options: [
+        {
+          name: ["-h", "--help"],
+          description: "Print help",
+        },
+        {
+          name: ["-V", "--version"],
+          description: "Print version",
+        },
+      ],
+    },
+    {
       name: "import",
       description: "Import entries from another application",
       options: [
         {
           name: "--from",
           description: "Application to import from",
+          isRepeatable: true,
           args: {
             name: "from",
             suggestions: [
@@ -42,11 +124,11 @@ const completion: Fig.Spec = {
         },
         {
           name: ["-h", "--help"],
-          description: "Print help information",
+          description: "Print help",
         },
         {
           name: ["-V", "--version"],
-          description: "Print version information",
+          description: "Print version",
         },
       ],
       args: {
@@ -61,6 +143,7 @@ const completion: Fig.Spec = {
         {
           name: "--cmd",
           description: "Changes the prefix of the `z` and `zi` commands",
+          isRepeatable: true,
           args: {
             name: "cmd",
             isOptional: true,
@@ -69,6 +152,7 @@ const completion: Fig.Spec = {
         {
           name: "--hook",
           description: "Changes how often zoxide increments a directory's score",
+          isRepeatable: true,
           args: {
             name: "hook",
             isOptional: true,
@@ -85,11 +169,11 @@ const completion: Fig.Spec = {
         },
         {
           name: ["-h", "--help"],
-          description: "Print help information",
+          description: "Print help",
         },
         {
           name: ["-V", "--version"],
-          description: "Print version information",
+          description: "Print version",
         },
       ],
       args: {
@@ -112,7 +196,8 @@ const completion: Fig.Spec = {
       options: [
         {
           name: "--exclude",
-          description: "Exclude a path from results",
+          description: "Exclude the current directory",
+          isRepeatable: true,
           args: {
             name: "exclude",
             isOptional: true,
@@ -120,8 +205,8 @@ const completion: Fig.Spec = {
           },
         },
         {
-          name: "--all",
-          description: "Show deleted directories",
+          name: ["-a", "--all"],
+          description: "Show unavailable directories",
         },
         {
           name: ["-i", "--interactive"],
@@ -145,15 +230,16 @@ const completion: Fig.Spec = {
         },
         {
           name: ["-h", "--help"],
-          description: "Print help information",
+          description: "Print help",
         },
         {
           name: ["-V", "--version"],
-          description: "Print version information",
+          description: "Print version",
         },
       ],
       args: {
         name: "keywords",
+        isVariadic: true,
         isOptional: true,
       },
     },
@@ -162,20 +248,17 @@ const completion: Fig.Spec = {
       description: "Remove a directory from the database",
       options: [
         {
-          name: ["-i", "--interactive"],
-          description: "Use interactive selection",
-        },
-        {
           name: ["-h", "--help"],
-          description: "Print help information",
+          description: "Print help",
         },
         {
           name: ["-V", "--version"],
-          description: "Print version information",
+          description: "Print version",
         },
       ],
       args: {
         name: "paths",
+        isVariadic: true,
         isOptional: true,
         template: "folders",
       },
@@ -184,11 +267,11 @@ const completion: Fig.Spec = {
   options: [
     {
       name: ["-h", "--help"],
-      description: "Print help information",
+      description: "Print help",
     },
     {
       name: ["-V", "--version"],
-      description: "Print version information",
+      description: "Print version",
     },
   ],
 };

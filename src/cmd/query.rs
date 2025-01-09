@@ -4,15 +4,13 @@ use anyhow::{Context, Result};
 
 use crate::cmd::{Query, Run};
 use crate::config;
-use crate::db::{Database, DatabaseFile};
+use crate::db::{Database, Epoch, Stream, StreamOptions};
 use crate::error::BrokenPipeHandler;
-use crate::util::{self, Fzf};
+use crate::util::{self, Fzf, FzfChild};
 
 impl Run for Query {
     fn run(&self) -> Result<()> {
-        let data_dir = config::data_dir()?;
-        let mut db = DatabaseFile::new(data_dir);
-        let mut db = db.open()?;
+        let mut db = crate::db::Database::open()?;
         self.query(&mut db).and(db.save())
     }
 }
@@ -20,60 +18,103 @@ impl Run for Query {
 impl Query {
     fn query(&self, db: &mut Database) -> Result<()> {
         let now = util::current_time()?;
-
-        let mut stream = db.stream(now).with_keywords(&self.keywords);
-        if !self.all {
-            let resolve_symlinks = config::resolve_symlinks();
-            stream = stream.with_exists(resolve_symlinks);
-        }
-        if let Some(path) = &self.exclude {
-            stream = stream.with_exclude(path);
-        }
+        let mut stream = self.get_stream(db, now)?;
 
         if self.interactive {
-            let mut fzf = Fzf::new(false)?;
-            let stdin = fzf.stdin();
-
-            let selection = loop {
-                let dir = match stream.next() {
-                    Some(dir) => dir,
-                    None => break fzf.select()?,
-                };
-
-                match writeln!(stdin, "{}", dir.display_score(now)) {
-                    Err(e) if e.kind() == io::ErrorKind::BrokenPipe => break fzf.select()?,
-                    result => result.context("could not write to fzf")?,
-                }
-            };
-
-            if self.score {
-                print!("{}", selection);
-            } else {
-                let path = selection.get(5..).context("could not read selection from fzf")?;
-                print!("{}", path);
-            }
+            self.query_interactive(&mut stream, now)
         } else if self.list {
-            let stdout = io::stdout();
-            let handle = &mut stdout.lock();
-            while let Some(dir) = stream.next() {
-                if self.score {
-                    writeln!(handle, "{}", dir.display_score(now))
-                } else {
-                    writeln!(handle, "{}", dir.display())
-                }
-                .pipe_exit("stdout")?;
-            }
-            handle.flush().pipe_exit("stdout")?;
+            self.query_list(&mut stream, now)
         } else {
-            let dir = stream.next().context("no match found")?;
-            if self.score {
-                writeln!(io::stdout(), "{}", dir.display_score(now))
-            } else {
-                writeln!(io::stdout(), "{}", dir.display())
+            self.query_first(&mut stream, now)
+        }
+    }
+
+    fn query_interactive(&self, stream: &mut Stream, now: Epoch) -> Result<()> {
+        let mut fzf = Self::get_fzf()?;
+        let selection = loop {
+            match stream.next() {
+                Some(dir) if Some(dir.path.as_ref()) == self.exclude.as_deref() => continue,
+                Some(dir) => {
+                    if let Some(selection) = fzf.write(dir, now)? {
+                        break selection;
+                    }
+                }
+                None => break fzf.wait()?,
             }
-            .pipe_exit("stdout")?;
+        };
+
+        if self.score {
+            print!("{selection}");
+        } else {
+            let path = selection.get(7..).context("could not read selection from fzf")?;
+            print!("{path}");
+        }
+        Ok(())
+    }
+
+    fn query_list(&self, stream: &mut Stream, now: Epoch) -> Result<()> {
+        let handle = &mut io::stdout().lock();
+        while let Some(dir) = stream.next() {
+            if Some(dir.path.as_ref()) == self.exclude.as_deref() {
+                continue;
+            }
+            let dir = if self.score { dir.display().with_score(now) } else { dir.display() };
+            writeln!(handle, "{dir}").pipe_exit("stdout")?;
+        }
+        Ok(())
+    }
+
+    fn query_first(&self, stream: &mut Stream, now: Epoch) -> Result<()> {
+        let handle = &mut io::stdout();
+
+        let mut dir = stream.next().context("no match found")?;
+        while Some(dir.path.as_ref()) == self.exclude.as_deref() {
+            dir = stream.next().context("you are already in the only match")?;
         }
 
-        Ok(())
+        let dir = if self.score { dir.display().with_score(now) } else { dir.display() };
+        writeln!(handle, "{dir}").pipe_exit("stdout")
+    }
+
+    fn get_stream<'a>(&self, db: &'a mut Database, now: Epoch) -> Result<Stream<'a>> {
+        let mut options = StreamOptions::new(now)
+            .with_keywords(self.keywords.iter().map(|s| s.as_str()))
+            .with_exclude(config::exclude_dirs()?);
+        if !self.all {
+            let resolve_symlinks = config::resolve_symlinks();
+            options = options.with_exists(true).with_resolve_symlinks(resolve_symlinks);
+        }
+
+        let stream = Stream::new(db, options);
+        Ok(stream)
+    }
+
+    fn get_fzf() -> Result<FzfChild> {
+        let mut fzf = Fzf::new()?;
+        if let Some(fzf_opts) = config::fzf_opts() {
+            fzf.env("FZF_DEFAULT_OPTS", fzf_opts)
+        } else {
+            fzf.args([
+                // Search mode
+                "--exact",
+                // Search result
+                "--no-sort",
+                // Interface
+                "--bind=ctrl-z:ignore,btab:up,tab:down",
+                "--cycle",
+                "--keep-right",
+                // Layout
+                "--border=sharp", // rounded edges don't display correctly on some terminals
+                "--height=45%",
+                "--info=inline",
+                "--layout=reverse",
+                // Display
+                "--tabstop=1",
+                // Scripting
+                "--exit-0",
+            ])
+            .enable_preview()
+        }
+        .spawn()
     }
 }

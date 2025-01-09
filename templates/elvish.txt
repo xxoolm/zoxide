@@ -22,7 +22,7 @@ fn __zoxide_cd {|path|
 
 # Initialize hook to track previous directory.
 var oldpwd = $builtin:pwd
-set builtin:before-chdir = [$@builtin:before-chdir {|_| edit:add-var oldpwd $builtin:pwd }]
+set builtin:before-chdir = [$@builtin:before-chdir {|_| set oldpwd = $builtin:pwd }]
 
 # Initialize hook to add directories to zoxide.
 {%- if hook == InitHook::None %}
@@ -68,7 +68,7 @@ edit:add-var __zoxide_z~ $__zoxide_z~
 fn __zoxide_zi {|@rest|
     var path
     try {
-        set path = (zoxide query -i -- $@rest)
+        set path = (zoxide query --interactive -- $@rest)
     } catch {
     } else {
         __zoxide_cd $path
@@ -87,8 +87,10 @@ edit:add-var {{cmd}}~ $__zoxide_z~
 edit:add-var {{cmd}}i~ $__zoxide_zi~
 
 # Load completions.
-{# zoxide-based completions are currently not possible, because Elvish only
- # prints a completion if the current token is a prefix of it. -#}
+{#-
+  zoxide-based completions are currently not possible, because Elvish only prints
+  a completion if the current token is a prefix of it.
+#}
 fn __zoxide_z_complete {|@rest|
     if (!= (builtin:count $rest) 2) {
         builtin:return

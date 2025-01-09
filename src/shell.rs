@@ -10,7 +10,7 @@ pub struct Opts<'a> {
 
 macro_rules! make_template {
     ($name:ident, $path:expr) => {
-        #[derive(::std::fmt::Debug, ::askama::Template)]
+        #[derive(::std::fmt::Debug, ::rinja::Template)]
         #[template(path = $path)]
         pub struct $name<'a>(pub &'a self::Opts<'a>);
 
@@ -35,8 +35,8 @@ make_template!(Zsh, "zsh.txt");
 #[cfg(feature = "nix-dev")]
 #[cfg(test)]
 mod tests {
-    use askama::Template;
     use assert_cmd::Command;
+    use rinja::Template;
     use rstest::rstest;
     use rstest_reuse::{apply, template};
 
@@ -57,7 +57,7 @@ mod tests {
         let opts = Opts { cmd, hook, echo, resolve_symlinks };
         let source = Bash(&opts).render().unwrap();
         Command::new("bash")
-            .args(&["--noprofile", "--norc", "-e", "-u", "-o", "pipefail", "-c", &source])
+            .args(["--noprofile", "--norc", "-e", "-u", "-o", "pipefail", "-c", &source])
             .assert()
             .success()
             .stdout("")
@@ -70,7 +70,7 @@ mod tests {
         let source = Bash(&opts).render().unwrap();
 
         Command::new("shellcheck")
-            .args(&["--enable", "all", "--shell", "bash", "-"])
+            .args(["--enable=all", "-"])
             .write_stdin(source)
             .assert()
             .success()
@@ -85,7 +85,7 @@ mod tests {
         source.push('\n');
 
         Command::new("shfmt")
-            .args(&["-d", "-s", "-ln", "bash", "-i", "4", "-ci", "-"])
+            .args(["--diff", "--indent=4", "--language-dialect=bash", "--simplify", "-"])
             .write_stdin(source)
             .assert()
             .success()
@@ -96,16 +96,31 @@ mod tests {
     #[apply(opts)]
     fn elvish_elvish(cmd: Option<&str>, hook: InitHook, echo: bool, resolve_symlinks: bool) {
         let opts = Opts { cmd, hook, echo, resolve_symlinks };
-        let mut source = String::new();
+        let mut source = String::default();
 
-        // Filter out lines using edit:*, since those functions are only available in the
-        // interactive editor.
-        for line in Elvish(&opts).render().unwrap().split('\n').filter(|line| !line.contains("edit:")) {
+        // Filter out lines using edit:*, since those functions are only available in
+        // the interactive editor.
+        for line in Elvish(&opts).render().unwrap().lines().filter(|line| !line.contains("edit:")) {
             source.push_str(line);
             source.push('\n');
         }
 
-        Command::new("elvish").args(&["-c", &source, "-norc"]).assert().success().stdout("").stderr("");
+        Command::new("elvish")
+            .args(["-c", &source, "-norc"])
+            .assert()
+            .success()
+            .stdout("")
+            .stderr("");
+    }
+
+    #[apply(opts)]
+    fn fish_no_builtin_abbr(cmd: Option<&str>, hook: InitHook, echo: bool, resolve_symlinks: bool) {
+        let opts = Opts { cmd, hook, echo, resolve_symlinks };
+        let source = Fish(&opts).render().unwrap();
+        assert!(
+            !source.contains("builtin abbr"),
+            "`builtin abbr` does not work on older versions of Fish"
+        );
     }
 
     #[apply(opts)]
@@ -118,7 +133,7 @@ mod tests {
 
         Command::new("fish")
             .env("HOME", tempdir)
-            .args(&["--command", &source, "--private"])
+            .args(["--command", &source, "--no-config", "--private"])
             .assert()
             .success()
             .stdout("")
@@ -151,8 +166,12 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let tempdir = tempdir.path();
 
-        let assert =
-            Command::new("nu").env("HOME", tempdir).args(&["--commands", &source]).assert().success().stderr("");
+        let assert = Command::new("nu")
+            .env("HOME", tempdir)
+            .args(["--commands", &source])
+            .assert()
+            .success()
+            .stderr("");
 
         if opts.hook != InitHook::Pwd {
             assert.stdout("");
@@ -165,7 +184,7 @@ mod tests {
         let source = Posix(&opts).render().unwrap();
 
         let assert = Command::new("bash")
-            .args(&["--posix", "--noprofile", "--norc", "-e", "-u", "-o", "pipefail", "-c", &source])
+            .args(["--posix", "--noprofile", "--norc", "-e", "-u", "-o", "pipefail", "-c", &source])
             .assert()
             .success()
             .stderr("");
@@ -179,19 +198,20 @@ mod tests {
         let opts = Opts { cmd, hook, echo, resolve_symlinks };
         let source = Posix(&opts).render().unwrap();
 
-        let assert = Command::new("dash").args(&["-e", "-u", "-c", &source]).assert().success().stderr("");
+        let assert =
+            Command::new("dash").args(["-e", "-u", "-c", &source]).assert().success().stderr("");
         if opts.hook != InitHook::Pwd {
             assert.stdout("");
         }
     }
 
     #[apply(opts)]
-    fn posix_shellcheck_(cmd: Option<&str>, hook: InitHook, echo: bool, resolve_symlinks: bool) {
+    fn posix_shellcheck(cmd: Option<&str>, hook: InitHook, echo: bool, resolve_symlinks: bool) {
         let opts = Opts { cmd, hook, echo, resolve_symlinks };
         let source = Posix(&opts).render().unwrap();
 
         Command::new("shellcheck")
-            .args(&["--enable", "all", "--shell", "sh", "-"])
+            .args(["--enable=all", "-"])
             .write_stdin(source)
             .assert()
             .success()
@@ -206,7 +226,7 @@ mod tests {
         source.push('\n');
 
         Command::new("shfmt")
-            .args(&["-d", "-s", "-ln", "posix", "-i", "4", "-ci", "-"])
+            .args(["--diff", "--indent=4", "--language-dialect=posix", "--simplify", "-"])
             .write_stdin(source)
             .assert()
             .success()
@@ -221,7 +241,7 @@ mod tests {
         Powershell(&opts).render_into(&mut source).unwrap();
 
         Command::new("pwsh")
-            .args(&["-NoLogo", "-NonInteractive", "-NoProfile", "-Command", &source])
+            .args(["-NoLogo", "-NonInteractive", "-NoProfile", "-Command", &source])
             .assert()
             .success()
             .stdout("")
@@ -234,7 +254,12 @@ mod tests {
         let mut source = Xonsh(&opts).render().unwrap();
         source.push('\n');
 
-        Command::new("black").args(&["--check", "--diff", "-"]).write_stdin(source).assert().success().stdout("");
+        Command::new("black")
+            .args(["--check", "--diff", "-"])
+            .write_stdin(source)
+            .assert()
+            .success()
+            .stdout("");
     }
 
     #[apply(opts)]
@@ -242,7 +267,7 @@ mod tests {
         let opts = Opts { cmd, hook, echo, resolve_symlinks };
         let source = Xonsh(&opts).render().unwrap();
 
-        Command::new("mypy").args(&["--command", &source, "--strict"]).assert().success().stderr("");
+        Command::new("mypy").args(["--command", &source, "--strict"]).assert().success().stderr("");
     }
 
     #[apply(opts)]
@@ -252,7 +277,7 @@ mod tests {
         source.push('\n');
 
         Command::new("pylint")
-            .args(&["--from-stdin", "--persistent=n", "zoxide"])
+            .args(["--from-stdin", "--persistent=n", "zoxide"])
             .write_stdin(source)
             .assert()
             .success()
@@ -268,7 +293,7 @@ mod tests {
         let tempdir = tempdir.path().to_str().unwrap();
 
         Command::new("xonsh")
-            .args(&["-c", &source, "--no-rc"])
+            .args(["-c", &source, "--no-rc"])
             .env("HOME", tempdir)
             .assert()
             .success()
@@ -283,7 +308,7 @@ mod tests {
 
         // ShellCheck doesn't support zsh yet: https://github.com/koalaman/shellcheck/issues/809
         Command::new("shellcheck")
-            .args(&["--enable", "all", "--shell", "bash", "-"])
+            .args(["--enable=all", "-"])
             .write_stdin(source)
             .assert()
             .success()
@@ -297,7 +322,7 @@ mod tests {
         let source = Zsh(&opts).render().unwrap();
 
         Command::new("zsh")
-            .args(&["-e", "-u", "-o", "pipefail", "--no-globalrcs", "--no-rcs", "-c", &source])
+            .args(["-e", "-u", "-o", "pipefail", "--no-globalrcs", "--no-rcs", "-c", &source])
             .assert()
             .success()
             .stdout("")

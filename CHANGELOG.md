@@ -7,13 +7,120 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.9.6] - 2024-09-19
+
+### Fixed
+
+- Fish: `builtin abbr` doesn't work on older versions.
+- Zsh: make `__zoxide_z_complete` available with `--no-cmd`.
+
+## [0.9.5] - 2024-09-13
+
+### Added
+
+- Zsh: improved `cd` completions.
+- Lazily delete excluded directories from the database.
+- Fish: detect infinite loop when using `alias cd=z`.
+- Installer: added flags for `--bin-dir`, `--man-dir`, `--arch`, and `--sudo`.
+- Nushell: support for v0.94.0+.
+- Bash/Fish/Zsh: support for `z -- dir` style queries.
+- Fish: improved Space-Tab completions.
+- Ksh: added support for the Korn shell.
+
+### Changed
+
+- fzf: removed `--select-1` from default options. The interactive selector will
+  now open up even if there is only one match.
+- Enforce that `$_ZO_DATA_DIR` is an absolute path.
+
+### Fixed
+
+- Zsh: Space-Tab completion repeating output multiple times when matching single
+  directory
+- Fish / Nushell / PowerShell: handle queries that look like args (e.g. `z -x`).
+- Elvish: `z -` now works as expected.
+- Fish: generated shell code avoids using aliased builtins.
+- Fish: `cd` command is now copied directly from
+  `$__fish_data_dir/functions/cd.fish`. This should minimize the chances of an
+  infinite loop when aliasing `cd=z`.
+- Symlinks not getting added to the database when `$_ZO_RESOLVE_SYMLINKS=0`.
+- Symlinked database files getting replaced instead of the actual files.
+
+## [0.9.4] - 2024-02-21
+
+### Changed
+
+- Zsh: improved Space-Tab completions.
+
+## [0.9.3] - 2024-02-13
+
+### Added
+
+- Nushell: support for v0.89.0.
+
+## [0.9.2] - 2023-08-04
+
+### Added
+
+- Short option `-a` for `zoxide query --all`.
+
+### Fixed
+
+- PowerShell: use `global` scope for variables / functions.
+
+## [0.9.1] - 2023-05-07
+
+### Added
+
+- Fish/Zsh: aliases on `__zoxide_z` will now use completions.
+- Nushell: support for v0.78.0.
+- Fish: plugin now works on older versions.
+- PowerShell: warn when PowerShell version is too old for `z -` and `z +`.
+- PowerShell: support for PWD hooks on all versions.
+
+### Fixed
+
+- Fish: not providing `cd` completions when there is a space in the path.
+- Bash/Fish/Zsh: providing `z` completions when the last argument starts with `z!`.
+- Bash/Fish/Zsh: attempting to `cd` when the last argument is `z!`.
+
+## [0.9.0] - 2023-01-08
+
+### Added
+
+- `edit` subcommand to adjust the scores of entries.
+
+### Fixed
+
+- Zsh: completions clashing with `zsh-autocomplete`.
+- Fzf: 'invalid option' on macOS.
+- PowerShell: handle UTF-8 encoding correctly.
+- Zsh: don't hide output from `chpwd` hooks.
+- Nushell: upgrade minimum supported version to v0.73.0.
+- Zsh: fix extra space in interactive completions when no match is found.
+- Fzf: various improvements, upgrade minimum supported version to v0.33.0.
+- Nushell: accidental redefinition of hooks when initialized twice.
+
+### Removed
+
+- `remove -i` subcommand: use `edit` instead.
+
+## [0.8.3] - 2022-09-02
+
+### Added
+
+- Nushell: support for `z -`.
+- Nushell: support for PWD hooks.
 
 ### Changed
 
 - Fish: change fuzzy completion prefix to `z!`.
 - Zsh: allow `z` to navigate dirstack via `+n` and `-n`.
 - Fzf: improved preview window.
+
+### Fixed
+
+- Bash: double forward slash in completions.
 
 ## [0.8.2] - 2022-06-26
 
@@ -23,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Bash/Fish/Posix/Zsh: paths on Cygwin.
+- Bash/Fish/POSIX/Zsh: paths on Cygwin.
 - Fish: completions not working on certain systems.
 - Bash: completions not escaping spaces correctly.
 
@@ -96,7 +203,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- PowerShell: Hook not initializing correctly.
+- PowerShell: hook not initializing correctly.
 
 ## [0.7.6] - 2021-10-13
 
@@ -185,9 +292,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- `cd -` on fish shells.
+- `cd -` on Fish shells.
 - `__zoxide_hook` no longer changes value of `$?` within `$PROMPT_COMMAND` on
-  bash.
+  Bash.
 
 ### Removed
 
@@ -226,7 +333,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `$_ZO_EXCLUDE_DIRS` now supports globs.
 - `zoxide init` now defines `__zoxide_z*` functions that can be aliased as
   needed.
-- Support for the [xonsh](https://xon.sh/) shell.
+- Support for the [Xonsh](https://xon.sh/) shell.
 - `zoxide import` can now import from Autojump.
 
 ### Changed
@@ -235,7 +342,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Clobber conflicting alias definitions in bash/fish/zsh/POSIX shells.
+- Clobber conflicting alias definitions in Bash/Fish/Zsh/POSIX shells.
 
 ### Removed
 
@@ -246,7 +353,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Bug in Fish init script
+- Bug in Fish init script.
 
 ## [0.4.2] - 2020-07-03
 
@@ -271,7 +378,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Support for powershell.
+- Support for PowerShell.
 
 ### Removed
 
@@ -299,7 +406,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- fish no longer `cd`s to the user's home when no match is found.
+- Fish no longer `cd`s to the user's home when no match is found.
 
 ## [0.3.1] - 2020-04-03
 
@@ -339,7 +446,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Incorrect exit codes in `z` command on fish.
+- Incorrect exit codes in `z` command on Fish.
 
 ### Removed
 
@@ -352,7 +459,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `$_ZO_ECHO` to echo match before `cd`ing.
 - Minimal `ranger` plugin.
 - PWD hook to only update the database when the current directory is changed.
-- Support for bash.
+- Support for Bash.
 - `migrate` subcommand to allow users to migrate from `z`.
 
 ### Fixed
@@ -366,11 +473,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `init` subcommand to remove dependency on shell plugin managers.
 - Support for `z -` command to go to previous directory.
 - `Cargo.lock` for more reproducible builds.
-- Support for the fish shell.
+- Support for the Fish shell.
 
 ### Fixed
 
-- `_zoxide_precmd` overriding other precmd hooks on zsh.
+- `_zoxide_precmd` overriding other precmd hooks on Zsh.
 
 ## [0.1.1] - 2020-03-08
 
@@ -392,8 +499,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - GitHub Actions pipeline to build and upload releases.
-- Support for zsh.
+- Add support for Zsh.
 
+[0.9.6]: https://github.com/ajeetdsouza/zoxide/compare/v0.9.5...v0.9.6
+[0.9.5]: https://github.com/ajeetdsouza/zoxide/compare/v0.9.4...v0.9.5
+[0.9.4]: https://github.com/ajeetdsouza/zoxide/compare/v0.9.3...v0.9.4
+[0.9.3]: https://github.com/ajeetdsouza/zoxide/compare/v0.9.2...v0.9.3
+[0.9.2]: https://github.com/ajeetdsouza/zoxide/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/ajeetdsouza/zoxide/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/ajeetdsouza/zoxide/compare/v0.8.3...v0.9.0
+[0.8.3]: https://github.com/ajeetdsouza/zoxide/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/ajeetdsouza/zoxide/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/ajeetdsouza/zoxide/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/ajeetdsouza/zoxide/compare/v0.7.9...v0.8.0

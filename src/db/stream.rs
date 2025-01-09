@@ -2,95 +2,53 @@ use std::iter::Rev;
 use std::ops::Range;
 use std::{fs, path};
 
+use glob::Pattern;
+
 use crate::db::{Database, Dir, Epoch};
-use crate::util;
+use crate::util::{self, MONTH};
 
-pub struct Stream<'db, 'file> {
-    db: &'db mut Database<'file>,
+pub struct Stream<'a> {
+    db: &'a mut Database,
     idxs: Rev<Range<usize>>,
-
-    keywords: Vec<String>,
-
-    check_exists: bool,
-    expire_below: Epoch,
-    resolve_symlinks: bool,
-
-    exclude_path: Option<String>,
+    options: StreamOptions,
 }
 
-impl<'db, 'file> Stream<'db, 'file> {
-    pub fn new(db: &'db mut Database<'file>, now: Epoch) -> Self {
-        // Iterate in descending order of score.
-        db.dirs.sort_unstable_by(|dir1, dir2| dir1.score(now).total_cmp(&dir2.score(now)));
-        let idxs = (0..db.dirs.len()).rev();
-
-        // If a directory is deleted and hasn't been used for 90 days, delete it from the database.
-        let expire_below = now.saturating_sub(90 * 24 * 60 * 60);
-
-        Stream {
-            db,
-            idxs,
-            keywords: Vec::new(),
-            check_exists: false,
-            expire_below,
-            resolve_symlinks: false,
-            exclude_path: None,
-        }
+impl<'a> Stream<'a> {
+    pub fn new(db: &'a mut Database, options: StreamOptions) -> Self {
+        db.sort_by_score(options.now);
+        let idxs = (0..db.dirs().len()).rev();
+        Stream { db, idxs, options }
     }
 
-    pub fn with_exclude<S: Into<String>>(mut self, path: S) -> Self {
-        self.exclude_path = Some(path.into());
-        self
-    }
-
-    pub fn with_exists(mut self, resolve_symlinks: bool) -> Self {
-        self.check_exists = true;
-        self.resolve_symlinks = resolve_symlinks;
-        self
-    }
-
-    pub fn with_keywords<S: AsRef<str>>(mut self, keywords: &[S]) -> Self {
-        self.keywords = keywords.iter().map(util::to_lowercase).collect();
-        self
-    }
-
-    pub fn next(&mut self) -> Option<&Dir<'file>> {
+    pub fn next(&mut self) -> Option<&Dir> {
         while let Some(idx) = self.idxs.next() {
-            let dir = &self.db.dirs[idx];
+            let dir = &self.db.dirs()[idx];
 
-            if !self.matches_keywords(&dir.path) {
+            if !self.filter_by_keywords(&dir.path) {
                 continue;
             }
 
-            if !self.matches_exists(&dir.path) {
-                if dir.last_accessed < self.expire_below {
-                    self.db.dirs.swap_remove(idx);
-                    self.db.modified = true;
+            if !self.filter_by_exclude(&dir.path) {
+                self.db.swap_remove(idx);
+                continue;
+            }
+
+            if !self.filter_by_exists(&dir.path) {
+                if dir.last_accessed < self.options.ttl {
+                    self.db.swap_remove(idx);
                 }
                 continue;
             }
 
-            if Some(dir.path.as_ref()) == self.exclude_path.as_deref() {
-                continue;
-            }
-
-            let dir = &self.db.dirs[idx];
+            let dir = &self.db.dirs()[idx];
             return Some(dir);
         }
 
         None
     }
 
-    fn matches_exists<S: AsRef<str>>(&self, path: S) -> bool {
-        if !self.check_exists {
-            return true;
-        }
-        let resolver = if self.resolve_symlinks { fs::symlink_metadata } else { fs::metadata };
-        resolver(path.as_ref()).map(|m| m.is_dir()).unwrap_or_default()
-    }
-
-    fn matches_keywords<S: AsRef<str>>(&self, path: S) -> bool {
-        let (keywords_last, keywords) = match self.keywords.split_last() {
+    fn filter_by_keywords(&self, path: &str) -> bool {
+        let (keywords_last, keywords) = match self.options.keywords.split_last() {
             Some(split) => split,
             None => return true,
         };
@@ -116,6 +74,81 @@ impl<'db, 'file> Stream<'db, 'file> {
 
         true
     }
+
+    fn filter_by_exclude(&self, path: &str) -> bool {
+        !self.options.exclude.iter().any(|pattern| pattern.matches(path))
+    }
+
+    fn filter_by_exists(&self, path: &str) -> bool {
+        if !self.options.exists {
+            return true;
+        }
+
+        // The logic here is reversed - if we resolve symlinks when adding entries to
+        // the database, we should not return symlinks when querying back from
+        // the database.
+        let resolver =
+            if self.options.resolve_symlinks { fs::symlink_metadata } else { fs::metadata };
+        resolver(path).map(|metadata| metadata.is_dir()).unwrap_or_default()
+    }
+}
+
+pub struct StreamOptions {
+    /// The current time.
+    now: Epoch,
+
+    /// Only directories matching these keywords will be returned.
+    keywords: Vec<String>,
+
+    /// Directories that match any of these globs will be lazily removed.
+    exclude: Vec<Pattern>,
+
+    /// Directories will only be returned if they exist on the filesystem.
+    exists: bool,
+
+    /// Whether to resolve symlinks when checking if a directory exists.
+    resolve_symlinks: bool,
+
+    /// Directories that do not exist and haven't been accessed since TTL will
+    /// be lazily removed.
+    ttl: Epoch,
+}
+
+impl StreamOptions {
+    pub fn new(now: Epoch) -> Self {
+        StreamOptions {
+            now,
+            keywords: Vec::new(),
+            exclude: Vec::new(),
+            exists: false,
+            resolve_symlinks: false,
+            ttl: now.saturating_sub(3 * MONTH),
+        }
+    }
+
+    pub fn with_keywords<I>(mut self, keywords: I) -> Self
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
+    {
+        self.keywords = keywords.into_iter().map(util::to_lowercase).collect();
+        self
+    }
+
+    pub fn with_exclude(mut self, exclude: Vec<Pattern>) -> Self {
+        self.exclude = exclude;
+        self
+    }
+
+    pub fn with_exists(mut self, exists: bool) -> Self {
+        self.exists = exists;
+        self
+    }
+
+    pub fn with_resolve_symlinks(mut self, resolve_symlinks: bool) -> Self {
+        self.resolve_symlinks = resolve_symlinks;
+        self
+    }
 }
 
 #[cfg(test)]
@@ -124,7 +157,7 @@ mod tests {
 
     use rstest::rstest;
 
-    use super::Database;
+    use super::*;
 
     #[rstest]
     // Case normalization
@@ -147,8 +180,9 @@ mod tests {
     #[case(&["/foo/", "/bar"], "/foo/bar", false)]
     #[case(&["/foo/", "/bar"], "/foo/baz/bar", true)]
     fn query(#[case] keywords: &[&str], #[case] path: &str, #[case] is_match: bool) {
-        let mut db = Database { dirs: Vec::new().into(), modified: false, data_dir: &PathBuf::new() };
-        let stream = db.stream(0).with_keywords(keywords);
-        assert_eq!(is_match, stream.matches_keywords(path));
+        let db = &mut Database::new(PathBuf::new(), Vec::new(), |_| Vec::new(), false);
+        let options = StreamOptions::new(0).with_keywords(keywords.iter());
+        let stream = Stream::new(db, options);
+        assert_eq!(is_match, stream.filter_by_keywords(path));
     }
 }
